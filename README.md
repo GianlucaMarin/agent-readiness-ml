@@ -48,7 +48,7 @@ Before building any models, we need to deeply understand our data. What patterns
 
 ### 2.1 Score Distribution: A Bimodal Market
 
-![Score Distribution](outputs/score_distribution.png)
+![Score Distribution](docs/images/score_distribution.png)
 
 **What we observe:**
 The distribution shows two distinct clusters - websites either score very high (80-100) or very low (0-30). The middle range (40-70) is sparsely populated.
@@ -68,7 +68,7 @@ Agent-readiness is an "all or nothing" investment. You can't be "halfway ready" 
 
 ### 2.2 Feature Correlations: Everything is Connected
 
-![Feature Correlation Heatmap](outputs/feature_correlation_heatmap.png)
+![Feature Correlation Heatmap](docs/images/feature_correlation_heatmap.png)
 
 **What we observe:**
 Nearly **all features correlate 0.85-0.99** with each other (shown as dark red in heatmap). This is extreme multicollinearity.
@@ -94,7 +94,7 @@ Nearly **all features correlate 0.85-0.99** with each other (shown as dark red i
 
 ### 2.3 Score vs. Feature Quality: Strong Linear Relationship
 
-![Score vs Feature Count](outputs/score_vs_feature_count.png)
+![Score vs Feature Count](docs/images/score_vs_feature_count.png)
 
 **What we observe:**
 Near-perfect linear relationship between feature quality sum and overall score. The trend line equation is: `Score = 0.56 × Feature_Sum - 6.69`
@@ -116,7 +116,7 @@ We use **mean prediction (MAE: 23.89)** as our baseline. Any ML model must beat 
 
 ### 2.4 Feature Importance from Correlation: All Features Matter
 
-![Feature Importance (Correlation)](outputs/feature_importance.png)
+![Feature Importance (Correlation)](docs/images/feature_importance.png)
 
 **What we observe:**
 Top 15 features have nearly identical correlations (0.94-0.97) with the score. The bars are almost equal in length.
@@ -136,7 +136,7 @@ Difficult to justify dropping any features - all are predictive. We keep all 41 
 
 ### 2.5 Train/Validation/Test Split: Ensuring Fair Evaluation
 
-![Split Distributions](outputs/split_distributions.png)
+![Split Distributions](docs/images/split_distributions.png)
 
 **What we observe:**
 All three splits have nearly identical score distributions (mean ~72, similar shapes).
@@ -298,7 +298,7 @@ Our model predicts scores with an **average error of 1.09 points** on a 0-100 sc
 
 ### 5.1 Predictions vs. Actual Scores
 
-![RF Predictions vs Actual](outputs/rf_predictions_vs_actual.png)
+![RF Predictions vs Actual](docs/images/rf_predictions_vs_actual.png)
 
 **Left plot (Training):**
 Points cluster tightly on the diagonal (perfect prediction line). R² = 0.996 shows the model learned the training data very well.
@@ -313,7 +313,7 @@ Still excellent clustering, but slightly more scatter. R² = 0.994 shows strong 
 
 ### 5.2 Feature Importance: What Matters Most?
 
-![RF Feature Importance](outputs/rf_feature_importance.png)
+![RF Feature Importance](docs/images/rf_feature_importance.png)
 
 **Top 10 most important features:**
 
@@ -339,7 +339,7 @@ Remember the multicollinearity? Features vary together. The model can't attribut
 
 ### 5.3 Error Analysis: Where Does the Model Struggle?
 
-![Residual Plot](outputs/residual_plots.png)
+![Residual Plot](docs/images/residual_plots.png)
 
 **What we observe:**
 - Most residuals (errors) cluster near zero (horizontal red line)
@@ -383,7 +383,7 @@ Even in the worst case (MAE = 1.7), we're still dramatically better than baselin
 
 ### 6.2 Model Comparison: Baseline vs. Random Forest
 
-![Model Comparison](outputs/model_comparison.png)
+![Model Comparison](docs/images/model_comparison.png)
 
 **Bar charts show:**
 - **Left (MAE)**: Random Forest bar is barely visible compared to Baseline (95.4% reduction!)
