@@ -1071,6 +1071,174 @@ Erforderliche Maßnahmen:
 
 ---
 
+### 4.11 Synthetic Blind Test: Class Imbalance Problem erkannt
+
+Nach Cross-Validation führten wir einen **Synthetic Blind Test** mit 50 realistischen Test-Websites durch, die gezielt auch **Low- und Medium-Score-Szenarien** abdeckten.
+
+#### Erwartete vs. Tatsächliche Verteilung
+
+**Synthetischer Test-Datensatz (Ground Truth):**
+- Low (0-30): 10 Websites (20%)
+- Medium (30-70): 20 Websites (40%)
+- High (70-100): 20 Websites (40%)
+
+**Modell-Vorhersagen:**
+- Low (0-30): **1 Website (2%)** ⚠️
+- Medium (30-70): **7 Websites (14%)** ⚠️
+- High (70-100): **42 Websites (84%)** ⚠️
+
+#### Systematischer Bias entdeckt
+
+**Durchschnittlicher Prediction Bias: +3,21 Punkte**
+
+Das Modell überschätzt Scores **systematisch um durchschnittlich 3,2 Punkte**.
+
+**Kritische Beispiele:**
+
+| Website | Erwarteter Score | Predicted Score | Fehler | Kategorie |
+|---------|------------------|-----------------|--------|-----------|
+| Test_050 | 9,8 | **28,5** | **+18,7** | Low → Medium ❌ |
+| Test_049 | 22,1 | **41,4** | **+19,3** | Low → Medium ❌ |
+| Test_043 | 50,5 | **68,8** | **+17,8** | Medium → High ⚠️ |
+| Test_041 | 42,3 | **60,1** | **+17,8** | Medium → High ⚠️ |
+| Test_038 | 55,7 | **71,2** | **+15,5** | Medium → High ⚠️ |
+
+**Befund:** Modell "überschätzt" schlechte und mittelmäßige Websites systematisch!
+
+#### Root Cause: Class Imbalance im Trainings-Datensatz
+
+**Original Trainings-Daten Verteilung (178 Websites):**
+
+```
+Score-Bereich    | Anzahl | Prozent | Bias-Effekt
+-----------------|--------|---------|------------------
+Low (0-30)       | 19     | 10,7%   | Unterrepräsentiert ❌
+Medium (30-70)   | 43     | 24,2%   | Unterrepräsentiert ⚠️
+High (70-100)    | 116    | 65,2%   | Überrepräsentiert ✓
+```
+
+**Problem:**
+- **65% aller Trainings-Daten** sind High-Quality Websites
+- Nur **11% Low-Scores** → Modell hat kaum Erfahrung mit schlechten Websites
+- Modell lernt implizit: "Die meisten Websites sind gut"
+
+#### Warum entstehen falsche Vorhersagen?
+
+**1. Regression Towards the Mean**
+
+Bei wenigen Low-Score-Trainingsbeispielen (n=19) "zieht" das Modell Vorhersagen in Richtung des Trainings-Mittelwerts (≈72):
+
+```
+Erwarteter Score: 10  →  Modell denkt: "So niedrig habe ich selten gesehen"
+                      →  Vorhersage: 28 (näher am Trainings-Durchschnitt)
+```
+
+**2. Feature-Pattern-Mismatch**
+
+Low-Score-Websites haben Features wie:
+- `has_rest_api = 1` (minimal)
+- `has_oauth_support = 0`
+- `has_api_documentation = 1`
+
+Aber im Training sah das Modell selten Kombinationen wie:
+```
+has_rest_api=1 + has_oauth=0 + has_docs=1 → Score < 30
+```
+
+Stattdessen lernte es:
+```
+has_rest_api=1 → meist Score > 70 (basierend auf 116 High-Score-Beispielen)
+```
+
+**3. Decision Tree Leaf-Node Averaging**
+
+Random Forest erstellt Entscheidungsbäume. Wenn ein Leaf-Node hauptsächlich High-Scores gesehen hat:
+
+```
+Leaf-Node #142: [85, 88, 92, 23] → Durchschnitt: 72
+                                 ↑
+                            Seltener Low-Score wird "ausgemittelt"
+```
+
+#### Auswirkungen auf Production
+
+**Wenn Low/Medium-Websites in Produktion auftreten:**
+
+| Echter Score-Bereich | Erwartete Prediction | Tatsächliche Kategorie |
+|---------------------|----------------------|------------------------|
+| 0-20 (kritisch schlecht) | **25-35** | Medium statt Low ❌ |
+| 20-40 (schlecht) | **40-55** | Medium/High statt Low ❌ |
+| 40-60 (mittelmäßig) | **60-75** | High statt Medium ⚠️ |
+| 60-80 (gut) | **~Korrekt** | ✓ |
+| 80-100 (exzellent) | **~Korrekt** | ✓ |
+
+**Konsequenz:** Modell ist **unzuverlässig für Low- und Medium-Quality Websites**.
+
+#### Warum zeigten Test-Set & Cross-Validation dieses Problem nicht?
+
+**Test-Set Komposition (36 Websites):**
+- Low: 2 (5,6%)
+- Medium: 10 (27,8%)
+- High: 24 (66,7%)
+
+**→ Test-Set hatte ähnliche Imbalance wie Training!**
+
+Cross-Validation Folds hatten ebenfalls:
+- Durchschnittlich 8% Low-Scores pro Fold
+- Fold 6 (Outlier) hatte 21% Low-Scores → MAE = 1,85 (schlechteste Performance)
+
+**Erklärung:** Test-Set und CV-Folds spiegelten die **Trainings-Verteilung** wider, daher sahen die Metriken gut aus. Erst ein **ausbalancierter Blind-Test** enthüllte den Bias.
+
+#### Empfohlene Lösungen
+
+**1. Resampling-Techniken (Kurzfristig):**
+- **SMOTE** (Synthetic Minority Over-sampling) für Low-Scores
+- **Random Undersampling** von High-Scores
+- **Class Weights** in Random Forest anpassen
+
+**2. Mehr Daten sammeln (Mittelfristig):**
+- 50+ zusätzliche Low-Score Websites labeln
+- 30+ zusätzliche Medium-Score Websites labeln
+- Ziel: Mindestens 20% pro Kategorie
+
+**3. Stratified Training (Kurzfristig):**
+- Separate Modelle für Low/Medium/High trainieren
+- Ensemble-Ansatz: Erst klassifizieren (Low/Med/High), dann Score vorhersagen
+
+**4. Regularisierung verstärken (Sofort):**
+- `min_samples_leaf` erhöhen (5 → 10)
+- `max_depth` reduzieren (15 → 12)
+- → Verhindert Overfitting auf High-Score-Mehrheit
+
+**5. Alternative Loss-Funktion:**
+- Weighted MAE: Höheres Gewicht für Low-Score-Fehler
+- Quantile Regression statt Mean Regression
+
+#### Aktualisierte Production-Empfehlung
+
+**VORHER (nach Test-Set):**
+✓ Modell produktionsbereit mit MAE 0,64
+
+**NACHHER (nach Blind-Test):**
+⚠️ **Modell NICHT produktionsbereit für:**
+- Websites mit erwartetem Score < 40
+- Erste Evaluierung unbekannter Websites
+- Automatische Quality-Gates ohne menschliches Review
+
+✓ **Modell produktionsbereit für:**
+- High-Quality Websites (Score > 70) → Zuverlässig
+- Relative Rankings innerhalb High-Quality-Segment
+- Feature-Importance-Analyse (unabhängig von Score-Vorhersage)
+
+**Fazit:** Class Imbalance ist ein **kritisches, aber lösbares Problem**. Ohne Rebalancing-Maßnahmen besteht 18-20 Punkte Überschätzungs-Risiko bei Low-Scores.
+
+**Blind-Test-Ergebnisse:**
+- [synthetic_blind_test_50_RESULTS.csv](data/raw/synthetic_blind_test_50_RESULTS.csv)
+- Durchschnittlicher Bias: +3,21 Punkte
+- Max. Fehler: +19,3 Punkte (Test_049)
+
+---
+
 ## 5. Model Training: Random Forest Regressor
 
 Wir trainierten ein Random-Forest-Modell mit folgenden Hyperparametern:
