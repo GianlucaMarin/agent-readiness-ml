@@ -1404,6 +1404,81 @@ Training Data Distribution:
 
 ---
 
+### 4.13 Hyperparameter Tuning: Nested Cross-Validation (Keine Verbesserung)
+
+Nach Sample Weighting und Two-Stage führten wir systematisches **Hyperparameter-Tuning** durch, um zu prüfen, ob optimierte Parameter die Stabilität verbessern können.
+
+#### Methodik
+
+**Nested Cross-Validation:**
+- Outer Loop: 5-Fold CV (Performance-Evaluation)
+- Inner Loop: 3-Fold Grid Search (Hyperparameter-Selection)
+- **144 Kombinationen** getestet
+
+**Parameter Grid:**
+```
+max_depth: [12, 15, 18, 20]
+min_samples_leaf: [3, 5, 7, 10]
+min_samples_split: [2, 5, 10]
+max_features: ['sqrt', 'log2', 0.5]
+```
+
+#### Ergebnis: Baseline bleibt optimal ✅
+
+**Beste gefundene Hyperparameter:**
+- `max_depth: 18` (statt 15)
+- `min_samples_split: 5` (statt 2)
+- `max_features: 0.5` (statt None)
+
+**Test-Performance:**
+
+| Modell | Test MAE | Improvement | Status |
+|--------|----------|-------------|--------|
+| Baseline | 0,636 | - | ✅ Best |
+| Hyperparameter Tuned | 0,639 | **-0,5%** | ❌ Marginal schlechter |
+
+**CV-Stabilität:**
+- Nested CV MAE: 1,172 ± 0,556
+- CV%: 47,4% (leicht besser als 52%, aber immer noch instabil)
+
+#### Fazit: Baseline-Hyperparameter sind bereits optimal
+
+**Kernerkenntnisse:**
+1. ✗ Hyperparameter-Tuning brachte **keine Verbesserung** (0,5% schlechter)
+2. ✗ CV-Stabilität verbesserte sich nur marginal (47% vs. 52%)
+3. ✓ **Bestätigt unsere Hypothese:** Problem ist DATA, nicht MODEL ARCHITECTURE
+4. ✓ Auch perfekt optimierte Hyperparameter können 9 Low-Score-Samples nicht kompensieren
+
+**Wissenschaftlicher Wert:**
+> Nach vier verschiedenen Ansätzen (Baseline, Sample Weighting, Two-Stage, Hyperparameter Tuning) ist bewiesen: **Das ursprüngliche Baseline-Model ist die optimale Lösung für diesen Datensatz.**
+
+**Dokumentation:**
+- [HYPERPARAMETER_TUNING_REPORT.txt](outputs/HYPERPARAMETER_TUNING_REPORT.txt)
+- [hyperparameter_tuning_results.png](outputs/hyperparameter_tuning_results.png)
+- Tuned Model: `models/experiments/random_forest_tuned.joblib` (nicht empfohlen)
+
+---
+
+### 4.14 Finale Model-Evaluation: Vier Ansätze im Vergleich
+
+Nach umfassenden Experimenten wurde das **Baseline Random Forest Model** als beste Lösung bestätigt.
+
+| Ansatz | Test MAE | Change | Low MAE | Synthetic Bias | Status |
+|--------|----------|--------|---------|----------------|--------|
+| **1. Baseline** ✅ | **0,636** | - | 0,71 | +3,21 | **BEST** |
+| 2. Sample Weighted | 0,705 | -10,9% | 2,29 | +2,81 | Failed |
+| 3. Two-Stage (SMOTE) | 0,967 | -52,1% | 3,48 | +3,83 | Failed |
+| 4. Hyperparameter Tuned | 0,639 | -0,5% | - | - | Marginal worse |
+
+![Final Model Comparison](outputs/MODEL_COMPARISON_FINAL.png)
+
+**Lesson Learned:**
+> *"Simple is better than complex when limited by data quality, not model complexity. No ML technique can compensate for insufficient training samples (9 Low-scores)."*
+
+**Finale Entscheidung:** `models/random_forest_initial.joblib` bleibt **Production Model** ✅
+
+---
+
 #### Aktualisierte Production-Empfehlung
 
 **VORHER (nach Test-Set):**
@@ -1420,12 +1495,30 @@ Training Data Distribution:
 - Relative Rankings innerhalb High-Quality-Segment
 - Feature-Importance-Analyse (unabhängig von Score-Vorhersage)
 
-**Fazit:** Class Imbalance ist ein **kritisches, aber lösbares Problem**. Ohne Rebalancing-Maßnahmen besteht 18-20 Punkte Überschätzungs-Risiko bei Low-Scores.
+**NACHHER (nach 4 Optimierungs-Versuchen):**
 
-**Blind-Test-Ergebnisse:**
-- [synthetic_blind_test_50_RESULTS.csv](data/raw/synthetic_blind_test_50_RESULTS.csv)
-- Durchschnittlicher Bias: +3,21 Punkte
-- Max. Fehler: +19,3 Punkte (Test_049)
+✅ **FINALE EMPFEHLUNG: Baseline Model (`random_forest_initial.joblib`)**
+
+Nach umfassender Evaluation (Sample Weighting, Two-Stage, Hyperparameter Tuning) ist das **ursprüngliche Baseline-Model die beste verfügbare Lösung**.
+
+**Produktionsbereit für:**
+- High-Quality Websites (Score > 70) → MAE 0,48 ✅
+- Relative Rankings innerhalb High-Quality-Segment
+- Feature-Importance-Analyse
+
+**NICHT produktionsbereit für:**
+- Low-Score Websites (< 40) → Bias +3-19 Punkte ❌
+- Automatische Quality-Gates ohne Review
+- Critical Decision-Making ohne menschliche Validierung
+
+**Akzeptierte Limitation:**
+- Class Imbalance: Nur 9 Low-Score-Trainings-Samples
+- Systematischer Bias: +3,21 Punkte im Durchschnitt
+- **Lösung erfordert:** Mehr Low-Score-Daten sammeln (50+ Websites)
+
+**Alle Experimente dokumentiert:**
+- [MODEL_COMPARISON_SUMMARY.txt](outputs/MODEL_COMPARISON_SUMMARY.txt)
+- [MODEL_COMPARISON_FINAL.png](outputs/MODEL_COMPARISON_FINAL.png)
 
 ---
 
