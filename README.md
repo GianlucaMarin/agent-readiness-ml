@@ -1214,6 +1214,196 @@ Cross-Validation Folds hatten ebenfalls:
 - Weighted MAE: Höheres Gewicht für Low-Score-Fehler
 - Quantile Regression statt Mean Regression
 
+---
+
+### 4.12 Two-Stage Model Experiment: SMOTE + Specialized Regressors (FEHLGESCHLAGEN)
+
+Nach dem Scheitern von Sample Weighting versuchten wir einen **Two-Stage-Ansatz**:
+- **Stage 1**: RandomForestClassifier (Low/Medium/High) mit SMOTE-Balancierung
+- **Stage 2**: Drei spezialisierte RandomForestRegressors, je einer pro Kategorie
+
+#### Hypothese
+
+**Annahme:** Durch SMOTE-Balancierung des Klassifikators und separate Regressoren können wir:
+1. Low-Scores besser erkennen (Classifier)
+2. Kategorie-spezifische Muster lernen (Specialized Regressors)
+3. Class Imbalance-Problem lösen
+
+#### Implementierung
+
+**Stage 1 - Classifier:**
+```python
+# SMOTE balanciert Trainings-Daten
+Original: Low=9, Medium=32, High=83
+SMOTE:    Low=83, Medium=83, High=83 (ausgeglichen)
+
+Classifier: RandomForestClassifier(n_estimators=200, max_depth=15)
+```
+
+**Stage 2 - Specialized Regressors:**
+```python
+Low Regressor:    Trainiert auf 9 Low-Samples (Score 3-29)
+Medium Regressor: Trainiert auf 32 Medium-Samples (Score 31-62)
+High Regressor:   Trainiert auf 83 High-Samples (Score 71-100)
+```
+
+**Two-Stage Prediction:**
+```python
+1. Classifier predicts: Low/Medium/High
+2. Entsprechender Regressor predicts: Exakter Score
+```
+
+#### Ergebnisse: FEHLGESCHLAGEN ❌
+
+**Performance Comparison:**
+
+| Modell | Test MAE | Improvement | Status |
+|--------|----------|-------------|--------|
+| **Baseline** | 0,636 | - | ✓ Best |
+| **Sample Weighted** | 0,705 | -10,9% | ✗ Degraded |
+| **Two-Stage** | **0,967** | **-52,1%** | ✗✗ Critically Worse |
+
+**Synthetic Blind Test Distribution:**
+
+| Kategorie | Expected | Baseline | Two-Stage | Status |
+|-----------|----------|----------|-----------|--------|
+| Low (0-30) | 20% | 2% | **2%** | ❌ Nicht verbessert |
+| Medium (30-70) | 40% | 14% | **10%** | ❌ Noch schlechter |
+| High (70-100) | 40% | 84% | **88%** | ❌ Noch schlimmer |
+
+**Mean Prediction Bias:**
+- Baseline: +3,21 Punkte
+- Two-Stage: **+3,83 Punkte** (noch höher!)
+
+![Two-Stage Model Evaluation](outputs/two_stage_model_evaluation.png)
+
+#### Root Cause Analysis: Warum scheiterte Two-Stage?
+
+**1. SMOTE löst das Grundproblem nicht**
+
+SMOTE erstellt synthetische Samples durch Interpolation:
+```
+Original Low-Samples: [3, 7, 15, 23, 29] (n=9)
+SMOTE generiert:      [5, 11, 18, 21, ...] (n=74 neue)
+```
+
+**Problem:**
+- Synthetische Samples haben **keine neuen Feature-Patterns**
+- SMOTE interpoliert nur zwischen existierenden Punkten
+- Mit nur 9 echten Low-Samples gibt es **zu wenig Diversität**
+
+**2. Classifier-Bias trotz perfekter Accuracy**
+
+Obwohl der Classifier **100% Test-Accuracy** erreichte:
+```
+Confusion Matrix (Test):
+         Predicted
+         L   M   H
+True L   2   0   0
+     M   0  10   0
+     H   0   0  24
+```
+
+**Problem:** Der Classifier klassifiziert **neue, ungesehene** Synthetic-Test-Daten fast immer als "High":
+```
+Synthetic Test (50 Websites):
+Predicted: Low=1 (2%), Medium=5 (10%), High=44 (88%)
+```
+
+**Erklärung:**
+- Classifier lernte von Features, die überwiegend High-Scores repräsentieren
+- SMOTE-Samples sind zu ähnlich zu High-Score-Features
+- Bei echten Low-Score-Websites fehlt dem Classifier die Erfahrung
+
+**3. Low-Score Regressor mit nur 9 Trainings-Samples**
+
+```
+Low Regressor Performance:
+  Training MAE: 2,501 (auf nur 9 Samples)
+  Test MAE:     3,48  (auf 2 Samples)
+```
+
+**Problem:**
+- Mit nur 9 echten Trainings-Samples ist Overfitting unvermeidlich
+- Keine Generalisierung möglich
+- Selbst wenn Classifier korrekt "Low" vorhersagt, ist der Regressor unzuverlässig
+
+**4. Fundamental Data Limitation**
+
+```
+Training Data Distribution:
+  Low    (0-30):   9 samples  (7,3%)
+  Medium (30-70): 32 samples (25,8%)
+  High   (70-100): 83 samples (66,9%)
+```
+
+**Mathematische Grenze erreicht:**
+- SMOTE kann keine echten Patterns aus <10 Samples extrapolieren
+- Sample Weighting verschiebt Bias, aber löst ihn nicht
+- Two-Stage kann nicht klassifizieren, was es nie richtig gesehen hat
+
+**Fazit:** Keine ML-Technik kann fehlende Daten ersetzen!
+
+#### Kritische Erkenntnisse
+
+**✗ Two-Stage Model ist SCHLECHTER als Baseline:**
+- Test MAE: 0,967 vs. 0,636 (52% schlechter)
+- Synthetic Test Bias: +3,83 vs. +3,21 (schlechter)
+- Class Imbalance: 88% High vs. 84% High (nicht gelöst)
+
+**✗ SMOTE + Specialized Regressors lösen das Problem NICHT:**
+- SMOTE interpoliert, schafft aber keine neuen Feature-Kombinationen
+- 9 Low-Score-Samples sind zu wenig für Generalisierung
+- Perfect Classifier Accuracy ≠ Good Real-World Performance
+
+**✗ Fundamental Data Problem:**
+- **Keine ML-Architektur kann fehlende Daten kompensieren**
+- Mit 7% Low-Score-Anteil ist robuste Vorhersage unmöglich
+- Problem liegt bei **Data Collection**, nicht bei Model Architecture
+
+#### Fazit: Zurück zu Baseline Model
+
+**Entscheidung: Baseline RandomForest (random_forest_initial.joblib) bleibt das beste Modell**
+
+**Begründung:**
+1. **Niedrigste Test MAE**: 0,636 (vs. 0,705 Weighted, 0,967 Two-Stage)
+2. **Beste Generalisierung**: R² = 0,992 auf Test-Set
+3. **Einfachste Architektur**: Keine zusätzliche Komplexität
+4. **Nachvollziehbar**: Single-Model ist interpretierbar
+
+**Limitation akzeptiert:**
+- Modell überschätzt Low/Medium-Scores um durchschnittlich +3,2 Punkte
+- **Production-Use nur für High-Score-Bereich empfohlen** (Score > 60)
+- Für Low-Score-Detection: Manuelle Evaluation oder mehr Trainings-Daten erforderlich
+
+**Alternative Ansätze erfordern:**
+1. **Mehr Daten**: Mindestens 50+ Low-Score Websites labeln
+2. **Feature Engineering**: Neue Features, die Low-Scores besser charakterisieren
+3. **Hybrid-Ansatz**: Rule-based Low-Score-Detection + ML für Medium/High
+4. **Akzeptanz**: Modell als "High-Score-Detector", nicht als Universal-Predictor
+
+**Vollständige Dokumentation:**
+- Two-Stage Model Script: [train_two_stage_model.py](src/train_two_stage_model.py)
+- Evaluation Plot: [two_stage_model_evaluation.png](outputs/two_stage_model_evaluation.png)
+- Experimentelle Modelle: `models/experiments/` (⚠️ nicht für Production verwenden!)
+
+#### Vergleich aller drei Modelle
+
+![Model Comparison](outputs/MODEL_COMPARISON_FINAL.png)
+
+**Zusammenfassung aller Experimente:**
+
+| Modell | Test MAE | Improvement | Low MAE | Med MAE | High MAE | Synth Bias | Status |
+|--------|----------|-------------|---------|---------|----------|------------|--------|
+| **Baseline** | **0,636** | **-** | 0,71 | 1,01 | **0,48** | +3,21 | ✓ **Best** |
+| Sample Weighted | 0,705 | -10,9% | 2,29 | **0,79** | 0,49 | **+2,81** | ✗ Degraded |
+| Two-Stage | 0,967 | -52,1% | 3,48 | 0,92 | 0,78 | +3,83 | ✗✗ Failed |
+
+**Vollständiger Vergleichsbericht:**
+- [MODEL_COMPARISON_SUMMARY.txt](outputs/MODEL_COMPARISON_SUMMARY.txt)
+
+---
+
 #### Aktualisierte Production-Empfehlung
 
 **VORHER (nach Test-Set):**
