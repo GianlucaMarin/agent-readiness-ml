@@ -1,0 +1,149 @@
+================================================================================
+STEP 1.2: CROSS-VALIDATION DEEP DIVE - COMPREHENSIVE REPORT
+================================================================================
+
+Date: December 2025
+Author: Sandra Marin
+
+================================================================================
+EXECUTIVE SUMMARY
+================================================================================
+
+Dataset: 142 samples (Train + Val combined for CV)
+Features: 41 has_* features
+Model: Random Forest Regressor (n_estimators=200, max_depth=15)
+
+KEY FINDINGS:
+
+1. 5-Fold CV Mean MAE: 0.876 ± 0.454
+   95% CI: [0.478, 1.274]
+   Coefficient of Variation: 51.86%
+   Stability Score: 1/10
+
+2. 10-Fold CV Mean MAE: 0.880 ± 0.463
+   95% CI: [0.593, 1.167]
+   Coefficient of Variation: 52.62%
+   Stability Score: 1/10
+
+3. Comparison with Single Splits:
+   - Single Val MAE: 1.09
+   - Single Test MAE: 0.64
+   - Test MAE is within 10-Fold CV 95% CI
+
+4. Statistical Significance:
+   - Test (0.64) vs 5-Fold CV: p=0.3103 (Not significant)
+   - Val (1.09) vs 5-Fold CV: p=0.3509 (Not significant)
+
+5. Overall Stability: POOR - Performance is highly unstable, model is not robust
+
+================================================================================
+5-FOLD CV DETAILED RESULTS
+================================================================================
+
+ Fold  Train_MAE  Val_MAE  Val_RMSE   Val_R2  Val_MAPE  Val_Median_AE  Train_Size  Val_Size
+    1   0.673437 0.838635  1.753244 0.994366  2.594502       0.077051         113        29
+    2   0.636940 0.409761  0.670408 0.999006  0.613611       0.220502         113        29
+    3   0.618922 1.619394  3.397975 0.982054 17.275770       0.335070         114        28
+    4   0.631082 0.644761  1.209484 0.997929  2.658911       0.227775         114        28
+    5   0.727367 0.866103  1.484343 0.996559  3.557705       0.375268         114        28
+
+================================================================================
+10-FOLD CV DETAILED RESULTS
+================================================================================
+
+ Fold  Train_MAE  Val_MAE  Val_RMSE   Val_R2  Val_MAPE  Val_Median_AE  Train_Size  Val_Size
+    1   0.561110 0.774563  1.257606 0.996991  1.408638       0.065341         127        15
+    2   0.610965 0.907412  2.240246 0.990510  3.909678       0.207161         127        15
+    3   0.632149 0.490282  0.878812 0.998778  0.859415       0.221922         128        14
+    4   0.578598 0.269355  0.414997 0.999416  0.351320       0.211288         128        14
+    5   0.565150 1.299420  2.906863 0.978169  2.829638       0.313303         128        14
+    6   0.637213 1.852116  3.963898 0.983212 33.355581       0.217448         128        14
+    7   0.537495 0.795415  1.325848 0.996670  2.069404       0.293554         128        14
+    8   0.596449 0.515645  1.035296 0.998741  3.156131       0.210416         128        14
+    9   0.616313 1.193145  2.207483 0.992411  5.824533       0.237219         128        14
+   10   0.601887 0.699040  1.048286 0.998215  1.610594       0.302267         128        14
+
+================================================================================
+FOLD CHARACTERISTICS ANALYSIS
+================================================================================
+
+5-Fold Characteristics:
+ Fold     Low_%     Med_%    High_%  Mean_Score  Std_Score  Val_MAE
+    1  6.896552 24.137931 68.965517   73.862069  23.358856 0.838635
+    2  3.448276 27.586207 68.965517   75.068966  21.261802 0.409761
+    3 10.714286 28.571429 60.714286   69.571429  25.365089 1.619394
+    4 10.714286 21.428571 67.857143   69.464286  26.578028 0.644761
+    5 10.714286 25.000000 64.285714   71.250000  25.303338 0.866103
+
+10-Fold Characteristics:
+ Fold     Low_%     Med_%    High_%  Mean_Score  Std_Score  Val_MAE
+    1  6.666667 26.666667 66.666667   72.866667  22.925580 0.774563
+    2  6.666667 20.000000 73.333333   75.266667  22.997005 0.907412
+    3  7.142857 28.571429 64.285714   72.928571  25.140929 0.490282
+    4  0.000000 28.571429 71.428571   76.857143  17.170811 0.269355
+    5  0.000000 42.857143 57.142857   72.285714  19.673872 1.299420
+    6 21.428571 14.285714 64.285714   68.285714  30.592783 1.852116
+    7  7.142857 21.428571 71.428571   71.928571  22.976585 0.795415
+    8 14.285714 21.428571 64.285714   67.714286  29.182746 0.515645
+    9  7.142857 28.571429 64.285714   68.357143  25.339430 1.193145
+   10 14.285714 21.428571 64.285714   72.000000  24.813591 0.699040
+
+================================================================================
+LEARNING CURVE ANALYSIS
+================================================================================
+
+Training Size | Train MAE (±Std) | Val MAE (±Std) | Gap
+----------------------------------------------------------------------
+           22 |   4.025 ± 0.367  |   4.234 ± 1.336 | 0.210
+           45 |   1.380 ± 0.242  |   1.918 ± 0.894 | 0.538
+           67 |   0.966 ± 0.124  |   1.412 ± 0.604 | 0.446
+           90 |   0.849 ± 0.099  |   1.113 ± 0.470 | 0.263
+          113 |   0.687 ± 0.091  |   0.948 ± 0.456 | 0.262
+
+Convergence Assessment: ✓ GOOD - Model shows good convergence
+Final Train-Val Gap: 0.262
+
+================================================================================
+CRITICAL QUESTIONS ANSWERED
+================================================================================
+
+Q1: Is Test MAE (0.64) representative or lucky?
+    ✓ REPRESENTATIVE - Test MAE (0.64) is within 10-Fold CV 95% CI
+
+Q2: What's the true expected MAE (with confidence interval)?
+    Expected MAE: 0.880 [95% CI: 0.593 - 1.167]
+
+Q3: Is performance stable across different data splits?
+    ✗ NO - CV% = 52.62% (> 20% threshold)
+
+Q4: Should we proceed with this model or tune further?
+    ✗ TUNE REQUIRED - Poor stability. Hyperparameter tuning strongly recommended.
+
+Q5: Is our current hyperparameter choice robust?
+    ✗ NO - High variance suggests hyperparameters may not be optimal
+
+================================================================================
+FINAL VERDICT
+================================================================================
+
+STABILITY SCORE: 1/10
+
+EXPECTED PRODUCTION PERFORMANCE:
+Based on 10-fold cross-validation, we expect MAE of 0.88 ± 0.46
+(95% CI: [0.59, 1.17]) in production,
+assuming similar data distribution.
+
+ROBUSTNESS ASSESSMENT:
+✓ Robust to different data splits: NO
+✓ Robust to sample compositions: NO
+✓ Robust to training size variations: YES
+
+RECOMMENDATIONS:
+✗ Model shows instability. Recommended actions:
+  - Comprehensive hyperparameter tuning
+  - Feature engineering review
+  - Consider ensemble methods or alternative algorithms
+
+================================================================================
+END OF REPORT
+================================================================================

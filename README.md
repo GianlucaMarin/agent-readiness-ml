@@ -910,6 +910,167 @@ Ergebnis: Keine signifikante Autokorrelation
 
 ---
 
+### 4.10 Cross-Validation: Stabilitätsanalyse über verschiedene Data Splits
+
+Nach exzellenten Test-Set-Ergebnissen (MAE 0,64) führten wir eine umfassende Cross-Validation durch, um die **Stabilität der Performance** über verschiedene Daten-Splits hinweg zu validieren.
+
+#### Methodik
+
+**5-Fold & 10-Fold Stratified Cross-Validation:**
+- Combined Train + Val (142 Samples) für CV
+- Stratified Splits nach Score-Bereichen (Low/Medium/High)
+- Identische Hyperparameter wie Test-Evaluation
+- 5 Learning-Curve-Analysen (20%-100% Training-Größe)
+
+#### Ergebnisse
+
+| Ansatz | MAE (Mean ± Std) | 95% CI | CV% | Stability Score |
+|--------|------------------|--------|-----|-----------------|
+| **Single Val** (18) | 1,09 ± - | - | - | - |
+| **Single Test** (36) | 0,64 ± - | - | - | - |
+| **5-Fold CV** | 0,88 ± 0,45 | [0,48, 1,27] | 51,9% | 1/10 |
+| **10-Fold CV** | 0,88 ± 0,46 | [0,59, 1,17] | **52,6%** | **1/10** |
+
+![Cross-Validation Comparison](outputs/02_cross_validation/cv_boxplot_comparison.png)
+
+#### Kritische Erkenntnisse
+
+**✓ Test-MAE (0,64) ist repräsentativ:**
+- Liegt innerhalb des 10-Fold CV 95% Confidence Intervals [0,59, 1,17]
+- Statistische Tests: Test vs. CV nicht signifikant verschieden (p=0,310)
+- **Fazit**: Kein "Lucky Split" – Test-Performance ist valide
+
+**✗ KRITISCHES PROBLEM: Performance hochgradig instabil**
+- **Coefficient of Variation: 52,6%** (Ziel: <15% für Stabilität)
+- **Stability Score: 1/10** (kritisch niedrig)
+- Fold-MAE reicht von 0,27 bis 1,85 (7-fache Spanne!)
+- **Interpretation**: Modell ist NICHT robust gegenüber verschiedenen Daten-Splits
+
+#### Fold-by-Fold Performance Analyse
+
+![Fold Performance](outputs/02_cross_validation/fold_by_fold_mae.png)
+
+**10-Fold Variation:**
+- Best Fold: MAE = 0,27 (nahezu perfekt)
+- Worst Fold: MAE = 1,85 (⚠️ Outlier, Z-score = 2,22)
+- Median Fold: MAE ≈ 0,75
+- **Befund**: Extreme Variabilität deutet auf Sensitivität gegenüber spezifischen Samples hin
+
+**Ursachen-Analyse (Fold Characteristics):**
+
+![Fold Characteristics](outputs/02_cross_validation/fold_characteristics_heatmap.png)
+
+Folds mit hoher MAE haben:
+- Höheren Low-Score-Anteil (bis zu 21% vs. 7% Durchschnitt)
+- Niedrigeren Mean Score (68 vs. 73 Durchschnitt)
+- Höhere Score-Standardabweichung (30 vs. 22)
+
+**Erklärung**: Modell struggled bei Folds mit mehr "schwierigen" (niedrig-scorenden) Websites.
+
+#### Learning Curve
+
+![Learning Curve](outputs/02_cross_validation/learning_curve.png)
+
+| Training Size | Train MAE | Val MAE | Train-Val Gap |
+|---------------|-----------|---------|---------------|
+| 22 samples | 4,03 ± 0,37 | 4,23 ± 1,34 | 0,21 |
+| 45 samples | 1,38 ± 0,24 | 1,92 ± 0,89 | 0,54 |
+| 67 samples | 0,97 ± 0,12 | 1,41 ± 0,60 | 0,45 |
+| 90 samples | 0,85 ± 0,10 | 1,11 ± 0,47 | 0,26 |
+| **113 samples** | **0,69 ± 0,09** | **0,95 ± 0,46** | **0,26** |
+
+**Befund:**
+- ✓ Gute Konvergenz: Train-Val-Gap sinkt auf 0,26 (akzeptabel)
+- ⚠️ Hohe Val-Varianz: ±0,46 MAE selbst bei vollem Training-Set
+- **Diagnose**: Modell lernt gut, aber Val-Performance bleibt variabel wegen Daten-Heterogenität
+
+#### Statistische Signifikanztests
+
+**Test 1: Single Test (0,64) vs. 5-Fold CV (0,88)**
+- t-Statistik: 1,16
+- p-Wert: 0,310
+- **Ergebnis**: NICHT signifikant verschieden ✓
+
+**Test 2: Single Val (1,09) vs. 5-Fold CV (0,88)**
+- t-Statistik: -1,06
+- p-Wert: 0,351
+- **Ergebnis**: NICHT signifikant verschieden ✓
+
+**Test 3: Outlier Detection (10-Fold)**
+- Fold 6: MAE = 1,85, Z-score = 2,22 → **⚠️ OUTLIER**
+- Alle anderen Folds: |Z-score| < 2 → ✓ Normal
+
+**Interpretation**: Ein Fold (Fold 6) ist statistisch signifikanter Outlier mit 21% Low-Score-Anteil.
+
+#### Confidence Intervals Comparison
+
+![Confidence Intervals](outputs/02_cross_validation/cv_confidence_intervals.png)
+
+**Single Splits vs. Cross-Validation:**
+- Single Val: 1,09 (kein CI – Einzelmessung)
+- Single Test: 0,64 (kein CI – Einzelmessung)
+- **5-Fold CV**: 0,88 [0,48 – 1,27] (breites CI ⚠️)
+- **10-Fold CV**: 0,88 [0,59 – 1,17] (breites CI ⚠️)
+
+**Fazit**: Breite Confidence Intervals bestätigen hohe Unsicherheit über "wahre" Performance.
+
+#### Erwartete Production Performance
+
+**Basierend auf 10-Fold CV:**
+
+```
+Erwartetes MAE: 0,88 ± 0,46
+95% Confidence Interval: [0,59, 1,17]
+Worst-Case (oberes CI): MAE = 1,17
+Best-Case (unteres CI): MAE = 0,59
+```
+
+**Realistische Einschätzung:**
+- **Median-Szenario**: MAE ≈ 0,80 (häufigste Performance)
+- **Optimistisches Szenario**: MAE ≈ 0,60 (20% der Fälle)
+- **Pessimistisches Szenario**: MAE ≈ 1,50 (10% der Fälle, z.B. bei Low-Score-Datensätzen)
+
+#### Final Verdict: Stability Assessment
+
+**STABILITY SCORE: 1/10** (kritisch niedrig)
+
+**Robustness Assessment:**
+| Kriterium | Status | Bewertung |
+|-----------|--------|-----------|
+| Robust gegenüber verschiedenen Data Splits | ✗ NO | CV% = 52,6% |
+| Robust gegenüber Sample Compositions | ✗ NO | Fold 6 Outlier |
+| Robust gegenüber Training Size Variations | ✓ YES | Gute Konvergenz |
+
+**Empfehlungen:**
+
+**✗ KRITISCH – Modell NICHT produktionsbereit in aktueller Form**
+
+Erforderliche Maßnahmen:
+1. **Hyperparameter-Tuning** (Grid Search über n_estimators, max_depth, min_samples_leaf)
+2. **Feature Engineering** (Überprüfung auf Redundanzen, Interaktionen)
+3. **Ensemble Methods** (Stacking, Blending für Stabilität)
+4. **Alternative Algorithmen testen** (XGBoost, LightGBM, Neural Networks)
+5. **Data Augmentation** für Low-Score-Bereich (<30)
+
+**Warum diese Diskrepanz zwischen Test (0,64) und CV (0,88)?**
+
+**Antwort**: Test-Set hatte günstige Komposition:
+- Nur 5,6% Low-Scores (vs. 8,5% in Gesamt-Daten)
+- 66,7% High-Scores (vs. 65% Durchschnitt)
+- Homogenere Score-Verteilung als einige CV-Folds
+
+**Das bedeutet NICHT, dass Test-Ergebnisse falsch sind**, sondern dass:
+- Test-Performance repräsentativ ist **für ähnliche Datensätze**
+- Bei ungünstigeren Samples (mehr Low-Scores) MAE auf 1,5+ steigen kann
+- **Produktions-Deployment** sollte mit erwarteter MAE von **0,88 ± 0,46** kalkulieren
+
+**Vollständige Dokumentation:**
+- [CROSS_VALIDATION_REPORT.txt](outputs/02_cross_validation/CROSS_VALIDATION_REPORT.txt)
+- Alle Fold-Ergebnisse: `outputs/02_cross_validation/*.csv`
+- Alle 5 Visualisierungen: `outputs/02_cross_validation/*.png`
+
+---
+
 ## 5. Model Training: Random Forest Regressor
 
 Wir trainierten ein Random-Forest-Modell mit folgenden Hyperparametern:
